@@ -3,6 +3,7 @@ import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.sql.*;
+import java.util.*;
 
 public class Main {
 
@@ -24,6 +25,8 @@ public class Main {
             PrintWriter it = new PrintWriter(itFile, "UTF-8");
             PrintWriter en = new PrintWriter(enFile, "UTF-8");
 
+            Set<String> names = new HashSet<>();
+
             printHeader(it);
             printHeader(en);
             // create a database connection
@@ -39,22 +42,33 @@ public class Main {
                 while (rs.next()) {
                     String identifier = rs.getString(identifierColumn);
 
-                    String stringName = table.xmlName + "_" + identifier + "_" + table.suffix;
-                    String secondStringName = (table.secondSuffix != null && table.secondTextColumn != null) ? table.xmlName + "_" + identifier + "_" + table.secondSuffix : null;
-                    String thirdStringName = (table.thirdSuffix != null && table.thirdTextColumn != null) ? table.xmlName + "_" + identifier + "_" + table.thirdSuffix : null;
+                    String stringName = normalizeName(table.xmlName + "_" + identifier + "_" + table.suffix);
+                    String secondStringName = normalizeName((table.secondSuffix != null && table.secondTextColumn != null) ? table.xmlName + "_" + identifier + "_" + table.secondSuffix : "");
+                    String thirdStringName = normalizeName((table.thirdSuffix != null && table.thirdTextColumn != null) ? table.xmlName + "_" + identifier + "_" + table.thirdSuffix : "");
 
                     String text = rs.getString(table.textColumn);
                     String secondText = (table.secondSuffix != null && table.secondTextColumn != null) ? rs.getString(table.secondTextColumn) : "";
                     String thirdText = (table.thirdSuffix != null && table.thirdTextColumn != null) ? rs.getString(table.thirdTextColumn) : "";
                     int langId = rs.getInt(languageId);
-                    if (langId == LANGUAGE_EN) {
-                        if (text != null && !text.isEmpty()) printString(en, stringName, normalize(text));
-                        if (secondText != null && !secondText.isEmpty()) printString(en, secondStringName, normalize(secondText));
-                        if (thirdText != null && !thirdText.isEmpty()) printString(en, thirdStringName, normalize(thirdText));
-                    } else if (langId == LANGUAGE_IT && !text.isEmpty()) {
-                        if (text != null && !text.isEmpty()) printString(it, stringName, normalize(text));
-                        if (secondText != null && !secondText.isEmpty()) printString(it, secondStringName, normalize(secondText));
-                        if (thirdText != null && !thirdText.isEmpty()) printString(it, thirdStringName, normalize(thirdText));
+                    if (!names.contains(stringName) || names.contains(secondStringName) || names.contains(thirdStringName)) {
+                        if (langId == LANGUAGE_EN) {
+                            if (text != null && !text.isEmpty())
+                                printString(en, stringName, normalize(text));
+                            if (secondText != null && !secondText.isEmpty())
+                                printString(en, secondStringName, normalize(secondText));
+                            if (thirdText != null && !thirdText.isEmpty())
+                                printString(en, thirdStringName, normalize(thirdText));
+                        } else if (langId == LANGUAGE_IT && !text.isEmpty()) {
+                            if (!text.isEmpty())
+                                printString(it, stringName, normalize(text));
+                            if (secondText != null && !secondText.isEmpty())
+                                printString(it, secondStringName, normalize(secondText));
+                            if (thirdText != null && !thirdText.isEmpty())
+                                printString(it, thirdStringName, normalize(thirdText));
+                        }
+                        names.add(stringName);
+                        if (!secondStringName.isEmpty()) names.add(secondStringName);
+                        if (!thirdStringName.isEmpty()) names.add(thirdStringName);
                     }
                 }
 
@@ -85,7 +99,11 @@ public class Main {
     }
 
     public static String normalize(String str) {
-        return str.replace("'", "\\'").replace("&", "&amp;");
+        return str.replace("'", "\\'").replace("&", "&amp;").replace("?", "\\u003F");
+    }
+
+    public static String normalizeName(String str) {
+        return str.replace("-", "_").replace("+", "_");
     }
 
     public static String buildSql(Table table, String languageId) {
@@ -104,11 +122,15 @@ public class Main {
     }
 
     public static void printString(PrintWriter pw, String name, String string) {
-        pw.println("\t<string name=\"" + name + "\">" + string + "</string>");
+        pw.println("\t<string name=\"" + name + "\" formatted=\"false\">" + string + "</string>");
     }
 
     public static void printFooter(PrintWriter pw) {
         pw.println("</resources>");
+    }
+
+    public static boolean contains(Set<String> names, String first, String second, String third) {
+        return names.contains(first) || names.contains(second) || names.contains(third);
     }
 
 }
